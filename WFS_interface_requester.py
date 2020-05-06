@@ -974,6 +974,7 @@ class RunWFS(QtCore.QObject):
             self.socket1.close()
             
             if self.jobType == 'local':
+                print(self.psana)
                 command_string = "ssh %s 'killall python -u seaberg'" % self.psana
                 subprocess.Popen(['/bin/bash','-c',command_string])
           
