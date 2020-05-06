@@ -371,10 +371,10 @@ def runmaster(nClients,args,pars,comm,rank,size):
 
     pixelPeriod = mag1*dg/dx
 
-    # xlength = int((xmax-xmin)/pixelPeriod*2)
-    # ylength = int((ymax-ymin)/pixelPeriod*2)
-    xlength = xmax - xmin
-    ylength = ymax - ymin
+    xlength = int((xmax-xmin)/pixelPeriod*2)
+    ylength = int((ymax-ymin)/pixelPeriod*2)
+    # xlength = xmax - xmin
+    # ylength = ymax - ymin
 
 
     # initialize arrays
