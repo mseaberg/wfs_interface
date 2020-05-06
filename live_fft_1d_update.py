@@ -296,7 +296,7 @@ def runclient(args,pars,comm,rank,size):
 
 def runmaster(nClients,args,pars,comm,rank,size):
 
-
+    print('running')
 
     servername = args.server
 
