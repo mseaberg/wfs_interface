@@ -105,6 +105,9 @@ def runclient(args,pars,comm,rank,size):
 
     nevents = np.empty(0)
 
+    # initialize fit object
+    fit_object_x = None
+    fit_object_y = None
 
     # event loop
     for nevent,evt in enumerate(ds.events()):
@@ -270,8 +273,8 @@ def runclient(args,pars,comm,rank,size):
                 'lambda0': lambda0
             }
 
-            zf_x, W, x_prime, x_res = x_Talbot_lineout.get_legendre(param)
-            zf_y, W, y_prime, y_res = y_Talbot_lineout.get_legendre(param)
+            zf_x, W, x_prime, x_res, fit_object_x = x_Talbot_lineout.get_legendre(param, fit_object_x)
+            zf_y, W, y_prime, y_res, fit_object_y = y_Talbot_lineout.get_legendre(param, fit_object_y)
 
             x_prime *= 1e6
             y_prime *= 1e6
