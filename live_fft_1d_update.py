@@ -103,6 +103,7 @@ def runclient(args,pars,comm,rank,size):
 
     nevents = np.empty(0)
 
+
     # event loop
     for nevent,evt in enumerate(ds.events()):
 
