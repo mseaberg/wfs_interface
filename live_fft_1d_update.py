@@ -255,9 +255,6 @@ def runclient(args,pars,comm,rank,size):
             mag_x = x_pitch*dx/dg
             mag_y = y_pitch*dx/dg
 
-            zf_x = -(zT*mag_x/(mag_x-1.) - zT - zf)*1e3
-            zf_y = -(zT*mag_y/(mag_y-1.) - zT - zf)*1e3
-
             F0 = np.abs(Beam.NFFT(img0))
 
             dx_prime = x_Talbot_lineout.dx_prime
@@ -273,11 +270,19 @@ def runclient(args,pars,comm,rank,size):
                 'lambda0': lambda0
             }
 
-            zf_x, W, x_prime, x_res, fit_object_x = x_Talbot_lineout.get_legendre(param, fit_object_x)
-            zf_y, W, y_prime, y_res, fit_object_y = y_Talbot_lineout.get_legendre(param, fit_object_y)
+            # zf_x, W, x_prime, x_res, fit_object_x = x_Talbot_lineout.get_legendre(param, fit_object_x)
+            # zf_y, W, y_prime, y_res, fit_object_y = y_Talbot_lineout.get_legendre(param, fit_object_y)
+            zf_x, x_prime, x_res = x_Talbot_lineout.normal_integration(param)
+            zf_y, y_prime, y_res = y_Talbot_lineout.normal_integration(param)
 
             x_prime *= 1e6
             y_prime *= 1e6
+
+            zf_x = -(zf_x - zT - zf)*1e3
+            zf_y = -(zf_y - zT - zf)*1e3
+
+            # zf_x = -(zT*mag_x/(mag_x-1.) - zT - zf)*1e3
+            # zf_y = -(zT*mag_y/(mag_y-1.) - zT - zf)*1e3
 
             # x_grad = np.copy(x_res)
             # y_grad = np.copy(y_res)
