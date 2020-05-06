@@ -317,7 +317,7 @@ def runclient(args,pars,comm,rank,size):
             F0 = F0/np.max(F0)
             F0 += x_mask + y_mask
 
-            focus = np.abs(focus)/np.max(np.abs(focus))
+            focus = np.abs(focus)/np.max(np.abs(focus))/10
             # normalize to maximum
             #img0 = img0/np.max(img0)
             md.addarray('F0',focus)
