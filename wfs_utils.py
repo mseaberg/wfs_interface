@@ -14,6 +14,7 @@ def parse_wfs_config_gui(configFile):
     pars['exp_name'] = config.get('Main','exp_name')
     pars['hutch'] = config.get('Main','hutch')
     pars['live'] = config.getboolean('Main','live')
+    pars['2D'] = config.getboolean('Main','2D')
     pars['update_events'] = config.getint('Update','update_events')
     xmin = config.getint('Processing','xmin')
     xmax = config.getint('Processing','xmax')

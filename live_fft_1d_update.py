@@ -2,6 +2,7 @@ import sys
 #from Talbot_functions_crop import *
 from lcls_beamline_toolbox.xraybeamline2d import pitch
 from lcls_beamline_toolbox.xraybeamline2d.util import Util
+from lcls_beamline_toolbox.polyprojection.legendre import LegendreFit2D
 from beam import *
 from psana import *
 from skimage.transform import downscale_local_mean
@@ -38,6 +39,8 @@ def runclient(args,pars,comm,rank,size):
     lineout_width = pars['lineout_width']
     fraction = pars['fraction']
     epics_keys = pars['epics_keys']
+    downsample = pars['downsample']
+    order = pars['order']
 
     # number of scan plots
     numPlots = len(pars['plot_list'])
@@ -63,6 +66,11 @@ def runclient(args,pars,comm,rank,size):
 
     N = ymax-ymin
     M = xmax-xmin
+
+    if pars['2D']:
+        Nd = int(2048/(2**downsample))
+        Md = int(2048/(2**downsample))
+        fit_object = LegendreFit2D(Nd, Md, order)
 
     f_x = np.linspace(-M/2.,M/2.-1.,M)/M/dx
     f_y = np.linspace(-N/2.,N/2.-1.,N)/N/dx
@@ -147,14 +155,14 @@ def runclient(args,pars,comm,rank,size):
             # check if the image needs to be rotated
             img0 = interpolate.rotate(img0,pars['angle'],reshape=False)
 
-            img0 = img0[ymin:ymax,xmin:xmax]
+            img1 = img0[ymin:ymax,xmin:xmax]
 
-            if np.sum(img0)<0.5e7:continue
+            if np.sum(img1)<0.5e7:continue
 
-            N,M = np.shape(img0)
+            N,M = np.shape(img1)
             #print(N)
             #print(M)
-            img0 = np.pad(img0,((int(N/2*padSize),int(N/2*padSize)),
+            img1 = np.pad(img1,((int(N/2*padSize),int(N/2*padSize)),
                                 (int(M/2*padSize),int(M/2*padSize))),'constant')
             # get scan pv
             j1 = 0
@@ -203,8 +211,8 @@ def runclient(args,pars,comm,rank,size):
             y_mask = ((f_x)**2+(f_y-fc/dx)**2)<(fc/4/dx)**2
             y_mask = y_mask*(((f_x)**2+(f_y-fc/dx)**2)>(fc/4./dx-2./N/dx)**2)
 
-            lineout_x = Util.get_horizontal_lineout(img0, half_width=lineout_width/2)
-            lineout_y = Util.get_vertical_lineout(img0, half_width=lineout_width/2)
+            lineout_x = Util.get_horizontal_lineout(img1, half_width=lineout_width/2)
+            lineout_y = Util.get_vertical_lineout(img1, half_width=lineout_width/2)
 
             # lineout_x = np.sum(img0[int(N/2-lineout_width/2):int(N/2+lineout_width/2),:],axis=0)
             # lineout_y = np.sum(img0[:,int(M/2-lineout_width/2):int(M/2+lineout_width/2)],axis=1)
@@ -224,8 +232,6 @@ def runclient(args,pars,comm,rank,size):
             y_vis = y_Talbot_lineout.x_vis
             y_vis2 = y_Talbot_lineout.vis2
 
-
-
             # MH = np.size(lineout_x)
             # NH = np.size(lineout_y)
             #
@@ -240,8 +246,8 @@ def runclient(args,pars,comm,rank,size):
 
             # lineout_x = np.sum(img0,axis=0)
             # lineout_y = np.sum(img0,axis=1)
-            lineout_x = Util.get_horizontal_lineout(img0)
-            lineout_y = Util.get_vertical_lineout(img0)
+            lineout_x = Util.get_horizontal_lineout(img1)
+            lineout_y = Util.get_vertical_lineout(img1)
 
             x_Talbot_full_lineout = pitch.TalbotLineout(lineout_x, fc, fraction)
             y_Talbot_full_lineout = pitch.TalbotLineout(lineout_y, fc, fraction)
@@ -255,7 +261,7 @@ def runclient(args,pars,comm,rank,size):
             mag_x = x_pitch*dx/dg
             mag_y = y_pitch*dx/dg
 
-            F0 = np.abs(Beam.NFFT(img0))
+            F0 = np.abs(Beam.NFFT(img1))
 
             dx_prime = x_Talbot_lineout.dx_prime
             dy_prime = y_Talbot_lineout.dx_prime
@@ -267,19 +273,23 @@ def runclient(args,pars,comm,rank,size):
                 'fraction': fraction,
                 'dx': dx,
                 'zT': zT,
-                'lambda0': lambda0
+                'lambda0': lambda0,
+                'downsample': downsample
             }
 
-            # zf_x, W, x_prime, x_res, fit_object_x = x_Talbot_lineout.get_legendre(param, fit_object_x)
-            # zf_y, W, y_prime, y_res, fit_object_y = y_Talbot_lineout.get_legendre(param, fit_object_y)
-            zf_x, x_prime, x_res = x_Talbot_lineout.normal_integration(param)
-            zf_y, y_prime, y_res = y_Talbot_lineout.normal_integration(param)
+            talbot_image = pitch.TalbotImage(img0, fc, fraction)
+            recovered, focus, wfs_param = talbot_image.get_legendre(fit_object, param)
+
+            zx, x_prime, x_res = x_Talbot_lineout.normal_integration(param)
+            zy, y_prime, y_res = y_Talbot_lineout.normal_integration(param)
 
             x_prime *= 1e6
             y_prime *= 1e6
 
-            zf_x = -(zf_x - zT - zf)*1e3
-            zf_y = -(zf_y - zT - zf)*1e3
+            # invert and subtract profile monitor distances, to get focus location relative to IP
+            # positive means focus is downstream of IP.
+            zf_x = -(zx - zT - zf)*1e3
+            zf_y = -(zy - zT - zf)*1e3
 
             # zf_x = -(zT*mag_x/(mag_x-1.) - zT - zf)*1e3
             # zf_y = -(zT*mag_y/(mag_y-1.) - zT - zf)*1e3
@@ -306,9 +316,11 @@ def runclient(args,pars,comm,rank,size):
             # normalize to maximum
             F0 = F0/np.max(F0)
             F0 += x_mask + y_mask
+
+            focus = np.abs(focus)/np.max(np.abs(focus))
             # normalize to maximum
             #img0 = img0/np.max(img0)
-            md.addarray('F0',F0)
+            md.addarray('F0',focus)
             md.addarray('img0',img0)
             md.addarray('x_res',x_res)
             md.addarray('y_res',y_res)
