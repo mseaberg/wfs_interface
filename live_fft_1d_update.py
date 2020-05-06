@@ -310,7 +310,7 @@ def runclient(args,pars,comm,rank,size):
             x_width = np.std(x_res)
             y_width = np.std(y_res)
 
-            img0 = img0/np.max(img0)
+            img1 = img1/np.max(img1)
 
             #F0 = np.abs(Beam.NFFT(img0))
             # normalize to maximum
