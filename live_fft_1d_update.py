@@ -1,5 +1,7 @@
 import sys
-from Talbot_functions_crop import *
+#from Talbot_functions_crop import *
+from lcls_beamline_toolbox.xraybeamline2d import pitch
+from lcls_beamline_toolbox.xraybeamline2d.util import Util
 from beam import *
 from psana import *
 from skimage.transform import downscale_local_mean
@@ -123,7 +125,7 @@ def runclient(args,pars,comm,rank,size):
 
         # send mpi data object to master when desired
         if i1 == update:
-        #if True:
+
             md=mpidata()
 
             i1 = 0
@@ -198,56 +200,94 @@ def runclient(args,pars,comm,rank,size):
             y_mask = ((f_x)**2+(f_y-fc/dx)**2)<(fc/4/dx)**2
             y_mask = y_mask*(((f_x)**2+(f_y-fc/dx)**2)>(fc/4./dx-2./N/dx)**2)
 
+            lineout_x = Util.get_horizontal_lineout(img0, half_width=lineout_width/2)
+            lineout_y = Util.get_vertical_lineout(img0, half_width=lineout_width/2)
 
-            lineout_x = np.sum(img0[int(N/2-lineout_width/2):int(N/2+lineout_width/2),:],axis=0)
-            lineout_y = np.sum(img0[:,int(M/2-lineout_width/2):int(M/2+lineout_width/2)],axis=1)
+            # lineout_x = np.sum(img0[int(N/2-lineout_width/2):int(N/2+lineout_width/2),:],axis=0)
+            # lineout_y = np.sum(img0[:,int(M/2-lineout_width/2):int(M/2+lineout_width/2)],axis=1)
 
-            MH = np.size(lineout_x)
-            NH = np.size(lineout_y)
+            x_Talbot_lineout = pitch.TalbotLineout(lineout_x, fc, fraction)
+            y_Talbot_lineout = pitch.TalbotLineout(lineout_y, fc, fraction)
 
-            xH = np.linspace(0,MH-1,MH)
-            yH = np.linspace(0,NH-1,NH)
+            x_pitch = x_Talbot_lineout.x_pitch
+            x_grad = x_Talbot_lineout.residual
+            # x_prime = x_Talbot_lineout.x_prime
+            x_vis = x_Talbot_lineout.x_vis
+            x_vis2 = x_Talbot_lineout.vis2
+
+            y_pitch = y_Talbot_lineout.x_pitch
+            y_grad = y_Talbot_lineout.residual
+            # y_prime = y_Talbot_lineout.x_prime
+            y_vis = y_Talbot_lineout.x_vis
+            y_vis2 = y_Talbot_lineout.vis2
+
+
+
+            # MH = np.size(lineout_x)
+            # NH = np.size(lineout_y)
+            #
+            # xH = np.linspace(0,MH-1,MH)
+            # yH = np.linspace(0,NH-1,NH)
 
             #lineout_x = lineout_x * (.52 - .46 * np.cos(2*np.pi*xH/MH))
             #lineout_y = lineout_y * (.52-.46*np.cos(2*np.pi*yH/NH))
 
-            x_pitch,x_res,x_prime,x_vis,x_vis2 = calc_pitch_vis(lineout_x,fc,fraction)
-            y_pitch,y_res,y_prime,y_vis,y_vis2 = calc_pitch_vis(lineout_y,fc,fraction)
+            # x_pitch,x_res,x_prime,x_vis,x_vis2 = calc_pitch_vis(lineout_x,fc,fraction)
+            # y_pitch,y_res,y_prime,y_vis,y_vis2 = calc_pitch_vis(lineout_y,fc,fraction)
 
-            lineout_x = np.sum(img0,axis=0)
-            lineout_y = np.sum(img0,axis=1)
-            x_pitch_full,x_res_full,x_prime_full = calc_pitch(lineout_x,fc,fraction)
-            y_pitch_full,y_res_rull,y_prime_full = calc_pitch(lineout_y,fc,fraction)
+            # lineout_x = np.sum(img0,axis=0)
+            # lineout_y = np.sum(img0,axis=1)
+            lineout_x = Util.get_horizontal_lineout(img0)
+            lineout_y = Util.get_vertical_lineout(img0)
+
+            x_Talbot_full_lineout = pitch.TalbotLineout(lineout_x, fc, fraction)
+            y_Talbot_full_lineout = pitch.TalbotLineout(lineout_y, fc, fraction)
+
+            x_pitch_full = x_Talbot_full_lineout.x_pitch
+            y_pitch_full = y_Talbot_full_lineout.y_pitch
+
+            # x_pitch_full,x_res_full,x_prime_full = calc_pitch(lineout_x,fc,fraction)
+            # y_pitch_full,y_res_rull,y_prime_full = calc_pitch(lineout_y,fc,fraction)
 
             mag_x = x_pitch*dx/dg
             mag_y = y_pitch*dx/dg
 
-
             zf_x = -(zT*mag_x/(mag_x-1.) - zT - zf)*1e3
             zf_y = -(zT*mag_y/(mag_y-1.) - zT - zf)*1e3
 
-            h_peak = 1./x_pitch
-            v_peak = 1./y_pitch
             F0 = np.abs(Beam.NFFT(img0))
 
-            
+            dx_prime = x_Talbot_lineout.dx_prime
+            dy_prime = y_Talbot_lineout.dx_prime
+            # dx_prime = x_prime[1]-x_prime[0]
+            # dy_prime = y_prime[1]-y_prime[0]
 
-            dx_prime = x_prime[1]-x_prime[0]
-            dy_prime = y_prime[1]-y_prime[0]
+            param = {
+                'dg': dg,
+                'fraction': fraction,
+                'dx': dx,
+                'zT': zT,
+                'lambda0': lambda0
+            }
 
-            x_grad = np.copy(x_res)
-            y_grad = np.copy(y_res)
+            zf_x, W, x_prime, x_res = x_Talbot_lineout.get_legendre(param)
+            zf_y, W, y_prime, y_res = y_Talbot_lineout.get_legendre(param)
 
+            x_prime *= 1e6
+            y_prime *= 1e6
 
-            x_res = np.cumsum(x_res)*dg/lambda0/zT*dx_prime*dx
-            y_res = np.cumsum(y_res)*dg/lambda0/zT*dy_prime*dx
-            x_prime = x_prime*dx*1e6
-            y_prime = y_prime*dx*1e6
+            # x_grad = np.copy(x_res)
+            # y_grad = np.copy(y_res)
 
-            px = np.polyfit(x_prime,x_res,2)
-            py = np.polyfit(y_prime,y_res,2)
-            x_res = x_res - px[0]*x_prime**2 - px[1]*x_prime - px[2]
-            y_res = y_res - py[0]*y_prime**2 - py[1]*y_prime - py[2]
+            # x_res = np.cumsum(x_res)*dg/lambda0/zT*dx_prime*dx
+            # y_res = np.cumsum(y_res)*dg/lambda0/zT*dy_prime*dx
+            # x_prime = x_prime*dx*1e6
+            # y_prime = y_prime*dx*1e6
+            #
+            # px = np.polyfit(x_prime,x_res,2)
+            # py = np.polyfit(y_prime,y_res,2)
+            # x_res = x_res - px[0]*x_prime**2 - px[1]*x_prime - px[2]
+            # y_res = y_res - py[0]*y_prime**2 - py[1]*y_prime - py[2]
 
             x_width = np.std(x_res)
             y_width = np.std(y_res)
