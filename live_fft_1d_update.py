@@ -27,9 +27,9 @@ import cPickle as pickle
 
 def runclient(args,pars,comm,rank,size):
 
-    sh_mem = pars['live']
-    expName = pars['exp_name']
-    hutchName = pars['hutch']
+    sh_mem = args.live
+    expName = args.experiment
+    hutchName = args.hutch
     runNum = args.run
     pars['run'] = runNum
     detName = pars['detName']
@@ -41,8 +41,9 @@ def runclient(args,pars,comm,rank,size):
     numPlots = len(pars['plot_list'])
 
     expName = expName
-    update = pars['updateEvents']
+    update = pars['update_events']
     runString = 'exp=%s:run=%s:smd' % (expName, runNum)
+    #runString = runNum
     #runString += ':dir=/reg/d/ffb/%s/%s/xtc:live' % (hutchName,expName)
     #print(runString)
 
@@ -88,8 +89,10 @@ def runclient(args,pars,comm,rank,size):
     # initialize instance of the mpidata class for communication with the master process
 #    md = mpidata()
 
-    i1 = 0
-   
+    # initialize i1 (which resets after each update) depending on the rank of the process
+    i1 = int((rank-1)*update/(size-1))
+
+
     md = mpidata()
 
     # initialize scan data (ordered as in plots.cfg file)
@@ -117,8 +120,8 @@ def runclient(args,pars,comm,rank,size):
         nevents = np.append(nevents,nevent) 
        
 
-        #if ((i1*size)%update == 0): # send mpi data object to master when desired
-        if i1==update:
+        # send mpi data object to master when desired
+        if i1 == update:
         #if True:
             md=mpidata()
 
@@ -298,7 +301,7 @@ def runmaster(nClients,args,pars,comm,rank,size):
     servername = args.server
 
     context = zmq.Context()
-    socket1 = context.socket(zmq.REQ)
+    socket1 = context.socket(zmq.PUB)
     socket1.connect("tcp://"+servername+":12301")
 
     # get ROI info
@@ -441,10 +444,10 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 
 
 
-                x_smooth = pandas.rolling_mean(zf_x,10)
-                y_smooth = pandas.rolling_mean(zf_y,10)
-                xw_smooth = pandas.rolling_mean(x_width,10)
-                yw_smooth = pandas.rolling_mean(y_width,10)
+                x_smooth = pandas.rolling_mean(zf_x,10,center=True)
+                y_smooth = pandas.rolling_mean(zf_y,10,center=True)
+                xw_smooth = pandas.rolling_mean(x_width,10,center=True)
+                yw_smooth = pandas.rolling_mean(y_width,10,center=True)
                 
 
 
@@ -452,41 +455,51 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 send_dict = {}
                 #send_dict['raw'] = downscale_local_mean(img0,(4,4))
                 #send_dict['F0'] = downscale_local_mean(F0,(4,4))
-                send_dict['raw'] = img0
-                send_dict['F0'] = F0
-                send_dict['x_res'] = x_res
-                send_dict['y_res'] = y_res
+                send_dict['raw_image'] = img0
+                send_dict['FFT'] = F0
+                send_dict['x_residual_phase'] = x_res
+                send_dict['y_residual_phase'] = y_res
                 send_dict['x_prime'] = x_prime
                 send_dict['y_prime'] = y_prime
-                send_dict['nevent'] = eventMask
+                send_dict['event_number'] = eventMask
 
                 for key in epics_keys:
                     send_dict[key] = dataDict[key][mask][order]
 
 
-                send_dict['zf_x'] = zf_x
-                send_dict['zf_y'] = zf_y
-                send_dict['x_width'] = x_width
-                send_dict['y_width'] = y_width
+                send_dict['x_focus_position'] = zf_x
+                send_dict['y_focus_position'] = zf_y
+                send_dict['x_phase_rms'] = x_width
+                send_dict['y_phase_rms'] = y_width
                 send_dict['x_smooth'] = x_smooth
                 send_dict['y_smooth'] = y_smooth
                 send_dict['xw_smooth'] = xw_smooth
                 send_dict['yw_smooth'] = yw_smooth
 
+                send_dict['key_list'] = ['event_number','x_focus_position',
+                        'y_focus_position','x_phase_rms','y_phase_rms']
 
+                for key in epics_keys:
+                    send_dict['key_list'].append(key)
+
+                
+                #message = socket1.recv()
+                #socket1.send_pyobj(send_dict)
+                #print(message)
+
+                #if message == 'stop':
+                #    break
+                #else:
+                #    socket1.send_pyobj(send_dict)
+                socket1.send_string('data', zmq.SNDMORE)
                 socket1.send_pyobj(send_dict)
                 print("sent data")
-                message = socket1.recv()
-
-                print(message)
-                if message == 'stop':
-                    break
-
                 #numpysocket.startClient(servername,12301,send_dict1) 
 
 
     send_dict = {}
     send_dict['message'] = 'finished'
+    socket1.send_string('data', zmq.SNDMORE)
     socket1.send_pyobj(send_dict)
     socket1.close()
 

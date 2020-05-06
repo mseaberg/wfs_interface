@@ -4,7 +4,7 @@
 # in batch:
 # bsub -q psanaq -n 2 -o %J.log -a mympi python mpi_driver.py exp=xpptut15:run=54
 
-from live_fft_1d_socket import *
+from live_fft_1d_update import *
 import wfs_utils
 
 
@@ -18,10 +18,13 @@ numClients = size-1
 import argparse
 import ConfigParser
 parser = argparse.ArgumentParser()
+parser.add_argument("-b","--hutch", help="hutch name",type=str)
+parser.add_argument("-e","--experiment", help="experiment number",type=str)
 parser.add_argument("-r","--run", help="run number from DAQ")
 parser.add_argument("-n","--noe",help="number of events, all events=0",default=-1, type=int)
 parser.add_argument("-c","--config",help="config file name",default='wfs',type=str)
 parser.add_argument("-s","--server",help="server name",type=str)
+parser.add_argument("-l","--live",help="run live",type=bool,default=False)
 args = parser.parse_args()
 
 pars = wfs_utils.parse_wfs_config_gui(args.config)

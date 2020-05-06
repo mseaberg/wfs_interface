@@ -4,6 +4,8 @@ from matplotlib import cm
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 from PyQt4.uic import loadUiType
+from PyQt4.QtGui import QPen
+from PyQt4.QtCore import Qt
 import sys
 import os
 import time
@@ -32,7 +34,7 @@ class App(QMainWindow, Ui_MainWindow):
     """
 
 
-    triggerStart = QtCore.pyqtSignal()
+    triggerStart = QtCore.pyqtSignal(str)
     triggerStop = QtCore.pyqtSignal()
 
     def __init__(self):
@@ -65,16 +67,17 @@ class App(QMainWindow, Ui_MainWindow):
 
         ## raw Image view
         self.topCanvas.addLabel(text='Raw Image',row=0,col=0,color='FFFFFF',bold=True)
-        self.rawView = self.topCanvas.addViewBox(row=1,col=0,border='w')
-        self.setup_viewbox(self.rawView,2048)
+        self.rawView = self.topCanvas.addViewBox(row=1,col=0)
+        self.rawRect = self.setup_viewbox(self.rawView,2048)
         self.rawImg = pg.ImageItem()
         self.rawView.addItem(self.rawImg)
+        
 
 
         ## FFT view
         self.topCanvas.addLabel(text='FFT',row=0,col=1,color='FFFFFF',bold=True)
-        self.fftView = self.topCanvas.addViewBox(row=1,col=1,border='w')
-        self.setup_viewbox(self.fftView,2048)
+        self.fftView = self.topCanvas.addViewBox(row=1,col=1)
+        self.fftRect = self.setup_viewbox(self.fftView,2048)
         self.fftImg = pg.ImageItem()
         self.fftView.addItem(self.fftImg)
 
@@ -87,8 +90,12 @@ class App(QMainWindow, Ui_MainWindow):
         legend = self.focusPlot.addLegend()
         self.focus_x = self.initialize_point_plot(self.focusPlot,color='r',
                 name='horizontal')
-        self.focus_y = self.initialize_point_plot(self.focusPlot,color='c',
+        self.focus_y = self.initialize_point_plot(self.focusPlot,color='b',
                 name='vertical')
+        self.focus_x_smooth = self.initialize_point_plot(self.focusPlot,color='m',
+                name='horizontal smoothed')
+        self.focus_y_smooth = self.initialize_point_plot(self.focusPlot,color='c',
+                name='vertical smoothed')
         self.label_plot(self.focusPlot,'Event number', 'Focus position (mm)')
         self.set_legend(legend)
 
@@ -99,8 +106,12 @@ class App(QMainWindow, Ui_MainWindow):
         legend = self.rmsPlot.addLegend()
         self.rms_x = self.initialize_point_plot(self.rmsPlot,color='r',
                 name='horizontal')
-        self.rms_y = self.initialize_point_plot(self.rmsPlot,color='c',
+        self.rms_y = self.initialize_point_plot(self.rmsPlot,color='b',
                 name='vertical')
+        self.rms_x_smooth = self.initialize_point_plot(self.rmsPlot,color='m',
+                name='horizontal smoothed')
+        self.rms_y_smooth = self.initialize_point_plot(self.rmsPlot,color='c',
+                name='vertical smoothed')
         self.label_plot(self.rmsPlot,'Event number', 'RMS residual phase (rad)')
         self.set_legend(legend)
 
@@ -129,22 +140,30 @@ class App(QMainWindow, Ui_MainWindow):
         colormap._init()
         self.lut = (colormap._lut * 255).view(np.ndarray)
 
+        self.runstring = ''
+
         ## set default experiment
         self.set_hutch()
         self.set_experiment()
         self.set_run()
 
         ## set default experiment and run
-        index = self.experimentComboBox.findText('xppx28816',QtCore.Qt.MatchFixedString)
+        index = self.hutchComboBox.findText('CXI',QtCore.Qt.MatchFixedString)
+        if index >= 0:
+            self.hutchComboBox.setCurrentIndex(index)
+        self.set_hutch()
+        index = self.experimentComboBox.findText('cxix28716',QtCore.Qt.MatchFixedString)
         if index >= 0:
             self.experimentComboBox.setCurrentIndex(index)
-        self.runnumberEdit.setText('58')
+        self.set_experiment()
+        self.runnumberEdit.setText('100')
         self.set_run()
 
         ## initialize various attributes
         self.plots = []
         self.pars = {}
         self.data_dict = {}
+        self.data_dict['key_list'] = []
         self.config = 'config/wfs.cfg'
 
     def load_config(self):
@@ -237,10 +256,12 @@ class App(QMainWindow, Ui_MainWindow):
         Update run string based on what is set in the GUI.
         """
 
-        self.runstring = ('exp='+self.experiment+':run='+
+        runstring = ('exp='+self.experiment+':run='+
                 self.runnumber+':smd')
 
-        self.messageLabel.setText(self.runstring)
+        self.messageLabel.setText(runstring)
+        
+        return runstring
 
     def set_hutch(self):
         """
@@ -253,7 +274,9 @@ class App(QMainWindow, Ui_MainWindow):
         self.experimentComboBox.addItems(sorted(experiments))
 
         # update the run string with the new choice
-        self.update_runstring()
+        self.runstring = self.update_runstring()
+       
+
 
     def set_experiment(self):
         """
@@ -263,7 +286,9 @@ class App(QMainWindow, Ui_MainWindow):
         self.experiment = str(self.experimentComboBox.currentText())
 
         # update the run string with the new choice
-        self.update_runstring()
+        self.runstring = self.update_runstring()
+
+
 
     def set_run(self):
         """
@@ -272,7 +297,9 @@ class App(QMainWindow, Ui_MainWindow):
         self.runnumber = str(self.runnumberEdit.text())
 
         # update the run string with the new choice
-        self.update_runstring()
+        self.runstring = self.update_runstring()
+
+
 
     def thread_finished(self):
         """
@@ -284,6 +311,14 @@ class App(QMainWindow, Ui_MainWindow):
         # reset text to Run and re-enable
         self.runPushButton.setText('Run')
         self.runPushButton.setEnabled(True)
+        self.jobTypeComboBox.setEnabled(True)
+        self.hutchComboBox.setEnabled(True)
+        self.experimentComboBox.setEnabled(True)
+        self.runnumberEdit.setEnabled(True)
+        self.liveCheckBox.setEnabled(True)
+        self.actionNew_configuration.setEnabled(True)
+        self.actionLoad_configuration.setEnabled(True)
+        self.actionModify_configuration.setEnabled(True)
 
     def enable_button(self):
         """
@@ -301,6 +336,16 @@ class App(QMainWindow, Ui_MainWindow):
 
             # disable run button while things are starting up
             self.runPushButton.setEnabled(False)
+            self.jobTypeComboBox.setEnabled(False)
+            self.hutchComboBox.setEnabled(False)
+            self.experimentComboBox.setEnabled(False)
+            self.runnumberEdit.setEnabled(False)
+            self.liveCheckBox.setEnabled(False)
+            self.actionNew_configuration.setEnabled(False)
+            self.actionLoad_configuration.setEnabled(False)
+            self.actionModify_configuration.setEnabled(False)
+
+
             # change button text to Stop
             self.runPushButton.setText('Stop')
 
@@ -309,14 +354,24 @@ class App(QMainWindow, Ui_MainWindow):
             self.thread.start()
 
             # create a RunWFS object for processing
-            self.wfs_calc = RunWFS(self.runnumber, self.config, self.update_plots, self.thread_finished,self.enable_button)
+
+            calc_parameters = {}
+            calc_parameters['hutch'] = self.hutch
+            calc_parameters['experiment'] = self.experiment
+            calc_parameters['runnumber'] = self.runnumber
+            calc_parameters['config'] = self.config
+            calc_parameters['update_function'] = self.update_plots
+            calc_parameters['finished_function'] = self.thread_finished
+            calc_parameters['enable_function'] = self.enable_button
+
+            self.wfs_calc = RunWFS(calc_parameters)
             # move RunWFS to the thread we created, before calling anything
             self.wfs_calc.moveToThread(self.thread)
             # connect triggers
             self.triggerStart.connect(self.wfs_calc.start)
             self.triggerStop.connect(self.wfs_calc.stop)
             # send the signal to start
-            self.triggerStart.emit()
+            self.triggerStart.emit(str(self.jobTypeComboBox.currentText()))
 
         elif self.runPushButton.text() == 'Stop':
 
@@ -331,36 +386,41 @@ class App(QMainWindow, Ui_MainWindow):
         :param data_dict: dictionary containing all data for plotting, from the plot signal
         """
 
-        self.data_dict = data_dict
         # make sure we're actually getting data. Don't change anything if not.
-        if 'raw' in data_dict.keys():
+        if 'raw_image' in data_dict.keys():
+
+            self.data_dict = data_dict
 
             # FFT data
-            F0 = data_dict['F0']
+            F0 = self.data_dict['FFT']
             # FFT display threshold
             F0[F0>.1] = 0.1
             # update images
-            self.rawImg.setImage(data_dict['raw'],levels=(0,1),lut=self.lut)
-            self.fftImg.setImage(F0,levels=(0,.101),lut=self.lut)
+            self.rawImg.setImage(np.flipud(self.data_dict['raw_image']).T,levels=(0,1),lut=self.lut)
+            self.fftImg.setImage(np.flipud(F0).T,levels=(0,.101),lut=self.lut)
             # update plots
-            self.focus_x.setData(data_dict['nevent'],data_dict['zf_x'])
-            self.focus_y.setData(data_dict['nevent'],data_dict['zf_y'])
-            self.rms_x.setData(data_dict['nevent'],data_dict['x_width'])
-            self.rms_y.setData(data_dict['nevent'],data_dict['y_width'])
-            self.xres_data.setData(data_dict['x_prime'],data_dict['x_res'])
-            self.yres_data.setData(data_dict['y_prime'],data_dict['y_res'])
+            self.focus_x.setData(self.data_dict['event_number'],self.data_dict['x_focus_position'])
+            self.focus_x_smooth.setData(self.data_dict['event_number'],self.data_dict['x_smooth'])
+            self.focus_y.setData(self.data_dict['event_number'],self.data_dict['y_focus_position'])
+            self.focus_y_smooth.setData(self.data_dict['event_number'],self.data_dict['y_smooth'])
+            self.rms_x.setData(self.data_dict['event_number'],self.data_dict['x_phase_rms'])
+            self.rms_x_smooth.setData(self.data_dict['event_number'],self.data_dict['xw_smooth'])
+            self.rms_y.setData(self.data_dict['event_number'],self.data_dict['y_phase_rms'])
+            self.rms_y_smooth.setData(self.data_dict['event_number'],self.data_dict['yw_smooth'])
+            self.xres_data.setData(self.data_dict['x_prime'],self.data_dict['x_residual_phase'])
+            self.yres_data.setData(self.data_dict['y_prime'],self.data_dict['y_residual_phase'])
             self.messageLabel.setText('Message received')
 
             # if this is the first iteration, re-size image boxes to match images
-            if data_dict['iteration'] == 0:
-                N,M = np.shape(data_dict['raw'])
-                self.update_viewbox(self.rawView,M,N)
-                self.update_viewbox(self.fftView,M,N)
+            if self.data_dict['iteration'] == 0:
+                N,M = np.shape(self.data_dict['raw_image'])
+                self.update_viewbox(self.rawView,M,N,self.rawRect)
+                self.update_viewbox(self.fftView,M,N,self.fftRect)
                 for plot in self.plots:
-                    plot.populate_combobox(data_dict)
+                    plot.populate_combobox(self.data_dict['key_list'])
             # update any AMI-style plots
             for plot in self.plots:
-                plot.update_plot(data_dict)
+                plot.update_plot(self.data_dict)
 
 
     def label_plot(self,plot,xlabel,ylabel):
@@ -389,8 +449,12 @@ class App(QMainWindow, Ui_MainWindow):
         """
         viewbox.setAspectLocked(True)
         viewbox.setRange(QtCore.QRectF(0,0,width,width))
+        rect1 = QtGui.QGraphicsRectItem(0,0,width,width)
+        rect1.setPen(QPen(Qt.white, int(width/100), Qt.SolidLine))
+        viewbox.addItem(rect1)
+        return rect1
 
-    def update_viewbox(self,viewbox,width,height):
+    def update_viewbox(self,viewbox,width,height,rect):
         """
         Helper function to adjust viewbox settings
         :param viewbox: pyqtgraph viewbox
@@ -400,6 +464,8 @@ class App(QMainWindow, Ui_MainWindow):
         :return:
         """
         viewbox.setRange(QtCore.QRectF(0,0,width,height))
+        rect.setRect(0,0,width,height)
+        
 
     def closeEvent(self, event):
         """
@@ -409,6 +475,8 @@ class App(QMainWindow, Ui_MainWindow):
         # if a process is running, try to stop smoothly, otherwise there is nothing to do.
         if self.runPushButton.text() == 'Stop':
             self.wfs_calc.stop()
+            # give the processing time to wrap up
+            time.sleep(.1)
             self.thread.quit()
             self.thread.wait()
 
@@ -450,7 +518,7 @@ class Config(QConfig, Ui_Config):
         # set lineEdits based on what's in file
         self.lineEdit_energy.setText(str(pars['energy']))
         self.lineEdit_ROI.setText(', '.join(map(str, pars['roi'])))
-        self.lineEdit_lineout.setText(str(pars['lineout_width']))
+        self.lineEdit_lineout.setText(str(int(pars['lineout_width'])))
         self.lineEdit_fraction.setText(str(pars['fraction']))
         self.lineEdit_threshold.setText(str(pars['thresh']))
         self.lineEdit_downsampling.setText(str(pars['downsample']))
@@ -465,6 +533,7 @@ class Config(QConfig, Ui_Config):
         self.lineEdit_pitch.setText(pitch)
         self.lineEdit_detName.setText(pars['detName'])
         self.lineEdit_rotation.setText(str(pars['angle']))
+        self.lineEdit_update.setText(str(pars['update_events']))
 
         epics_list = pars['epics_keys']
         epics_text = '\n'.join(epics_list)
@@ -517,7 +586,8 @@ class Config(QConfig, Ui_Config):
         config_parser.set('Setup','angle',
                 str(self.lineEdit_rotation.text()))
         config_parser.add_section('Update')
-        config_parser.set('Update','updateEvents','1')
+        config_parser.set('Update','update_events',
+                str(self.lineEdit_update.text()))
 
         # epics keys need to be parsed from textbox, and put into a
         # comma separated string
@@ -560,15 +630,26 @@ class NewPlot(QPlot, Ui_Plot):
 
         # make a new pyqtgraph plot
         self.plot_item = self.canvas.addPlot(row=0,col=0)
+        #self.legend = self.plot_item.addLegend()
         self.plot_item.showGrid(x=True,y=True,alpha=.7)
+        #self.plot_ref = self.plot_item.plot(np.array([0]),np.array([0]),
+        #        pen=pg.mkPen('b',width=5),symbol='o',symbolBrush='b',
+        #        name='reference')
         self.plot_data = self.plot_item.plot(np.linspace(0,99,100),np.zeros(100),
-                pen=pg.mkPen('r',width=5),symbol='o',symbolBrush='r')
+                pen=pg.mkPen('r',width=5),symbol='o',symbolBrush='r',
+                name='current data')
         parent.label_plot(self.plot_item,'', '')
+
+        # placeholder for reference plot
+        #self.plot_ref = None
+
         # get information from the plot window
         self.minimum = float(self.min_lineEdit.text())
         self.maximum = float(self.max_lineEdit.text())
         self.points = float(self.points_lineEdit.text())
         self.update_bins()
+
+        
 
         # connect plot window buttons
         self.min_lineEdit.returnPressed.connect(self.update_min)
@@ -577,14 +658,19 @@ class NewPlot(QPlot, Ui_Plot):
         self.xaxis_comboBox.activated.connect(self.update_axes)
         self.yaxis_comboBox.activated.connect(self.update_axes)
         self.actionChange_title.triggered.connect(self.change_title)
+        #self.actionReference.triggered.connect(self.add_reference)
 
         # flag to keep track of if a selection has been made yet in a combo box
         self.flag = 1
 
         # populate combo boxes
-        self.populate_combobox(parent.data_dict)
+        self.populate_combobox(parent.data_dict['key_list'])
 
-    def populate_combobox(self, axis_dict):
+        # initialize plot data
+        self.xplotdata = None
+        self.yplotdata = None
+
+    def populate_combobox(self, axis_list):
         """
         Method to populate x and y data combo boxes
         :param axis_dict: dictionary of data
@@ -593,13 +679,23 @@ class NewPlot(QPlot, Ui_Plot):
         # check if a selection has been made yet. If not, do nothing
         if self.flag:
             # get all the keys from the dictionary and populate the combo boxes
-            axis_list = []
-            for key in axis_dict.keys():
-                axis_list.append(key)
+            #axis_list = []
+            #for key in axis_dict.keys():
+            #    axis_list.append(key)
             self.xaxis_comboBox.clear()
             self.xaxis_comboBox.addItems(sorted(axis_list))
             self.yaxis_comboBox.clear()
             self.yaxis_comboBox.addItems(sorted(axis_list))
+
+    #def add_reference(self):
+
+    #    if (self.xplotdata is not None) and (self.yplotdata is not None):
+
+            #self.plot_ref = self.plot_item.plot(self.xplotdata,self.yplotdata,
+            #        pen=pg.mkPen('b',width=5),symbol='o',symbolBrush='b')
+    #        self.plot_ref.setData(self.xplotdata,self.yplotdata)
+    #    else:
+    #        pass
 
     def change_title(self):
         """
@@ -661,7 +757,7 @@ class NewPlot(QPlot, Ui_Plot):
         try:
             # if we're starting a new data analysis process, see if we should update combo box
             if data_dict['iteration'] == 0:
-                self.populate_combobox(data_dict)
+                self.populate_combobox(data_dict['key_list'])
             # get data based on x and y-axis keys
             xdata = data_dict[self.xaxis]
             ydata = data_dict[self.yaxis]
@@ -683,8 +779,11 @@ class NewPlot(QPlot, Ui_Plot):
 
             # create a mask to avoid nan's
             mask = np.logical_not(np.isnan(bin_means))
+
+            self.xplotdata = np.array(self.binPlot)[mask]
+            self.yplotdata = np.array(bin_means)[mask]
             # update the plot
-            self.plot_data.setData(np.array(self.binPlot)[mask],np.array(bin_means)[mask])
+            self.plot_data.setData(self.xplotdata,self.yplotdata)
 
         except:
             # print that there was an error if something didn't work.
@@ -714,7 +813,7 @@ class RunWFS(QtCore.QObject):
     triggerStop = QtCore.pyqtSignal()
     triggerEnable = QtCore.pyqtSignal()
 
-    def __init__(self,runstring,config,update_function,finished_function,enable_function):
+    def __init__(self,parameters):
         """
         Initialize a RunWFS object
         :param runstring: data access string (str)
@@ -726,17 +825,16 @@ class RunWFS(QtCore.QObject):
         QtCore.QObject.__init__(self)
 
         # set attributes
-        self.runstring = runstring
-        self.config = config
-        self.update_function = update_function
-        self.finished_function = finished_function
-        self.enable_function = enable_function
+        for key in parameters:
+            setattr(self, key, parameters[key])
+
 
         # set iteration number to zero
         self.iteration = 0
+        self.psana = 'psana'
          
     
-    def start(self):
+    def start(self,jobType):
         """
         Method to start data processing using MPI.
         """
@@ -753,15 +851,56 @@ class RunWFS(QtCore.QObject):
         # get the IP address of the host
         self.ipaddr = socket.gethostbyname(self.hostname)
 
+        self.jobType = jobType
+
+        command_string = ''
+        proc = None
+        out = ''
         # start data processing on another server using batch processing
         # string to run a bash command
-        command_string = './start_socket.sh '+self.runstring+' ' +self.ipaddr + ' '+self.config
-        # run the command
-        proc = subprocess.Popen(['/bin/bash','-c',command_string],stdout=subprocess.PIPE)
-        # capture any output. This includes the job ID.
-        out = proc.communicate()
-        print(out) 
+        if jobType=='batch':
+            command_string = ('./start_reply.sh %s %s %s %s %s'
+                    % (self.hutch, self.experiment, self.runnumber, self.ipaddr,
+                        self.config))
+            #+self.runstring+' ' +self.ipaddr + ' '+self.config
+            self.proc = subprocess.Popen(['/bin/bash','-c',command_string],stdout=subprocess.PIPE,stdin=subprocess.PIPE)
+            out = self.proc.communicate()
+            print(out) 
+    
 
+
+        elif jobType=='local':
+            command_string = "ssh psana 'hostname'"
+            proc = subprocess.Popen(['/bin/bash','-c',command_string],stdout=subprocess.PIPE)
+            self.psana = proc.communicate()[0].strip('\n')
+            
+            print(self.psana)
+
+            if self.psana.strip() == 'Authentication Failed.':
+                proc = subprocess.Popen(['/bin/bash','-c',command_string],stdout=subprocess.PIPE)
+                self.psana = proc.communicate()[0].strip('\n')
+            
+
+
+            command_string = ('./start_local.sh %s %s %s %s %s %s'
+                    % (self.psana, self.hutch, self.experiment, self.runnumber,
+                        self.ipaddr, self.config))
+        # run the command
+            self.proc = subprocess.Popen(['/bin/bash','-c',command_string],stdout=subprocess.PIPE,stdin=subprocess.PIPE)
+            out = '<10000>'     
+
+        elif jobType == 'live':
+            # figure out machine to run on
+            self.mon_node = 'daq-%s-mon06' % self.hutch.lower()
+            print(self.mon_node)
+            command_string = ('./start_live.sh %s %s %s %s %s %s'
+                    % (self.mon_node, self.hutch, self.experiment, self.runnumber,
+                        self.ipaddr, self.config))
+            self.proc = subprocess.Popen(['/bin/bash','-c',command_string],stdout=subprocess.PIPE,stdin=subprocess.PIPE)
+            out = '<10000>'
+            
+        # capture any output. This includes the job ID.
+    
         # find the job ID number
         i1 = out[0].find('<')
         i2 = out[0].find('>')
@@ -772,9 +911,11 @@ class RunWFS(QtCore.QObject):
 
         # start the zmq server
         context = zmq.Context()
-        self.socket1 = context.socket(zmq.REP)
+        self.socket1 = context.socket(zmq.SUB)
         # bind the port. Change this in the future to be more flexible
         self.socket1.bind("tcp://*:12301")
+        self.socket1.RCVTIMEO = 50
+        self.socket1.setsockopt(zmq.SUBSCRIBE, 'data')
 
         print('starting loop')
         # send the signal to re-enable the Run button
@@ -789,8 +930,22 @@ class RunWFS(QtCore.QObject):
         """
         # if it doesn't work just send an empty dictionary.
         try:
+
+
+            #if self.running == False:
+                # if the stop button was pressed, send a stop message to the job.
+            #    self.socket1.send("Exit")
+            #else:
+                # otherwise, just send a message to the job that the data was received.
+            #    self.socket1.send("Continue")
+            #    print('asking for data')
+
+
+
             # listen for a python object (dictionary)
+            topic = self.socket1.recv_string()
             dataDict = self.socket1.recv_pyobj()
+            print('data received')
             # add the iteration number to the dictionary
             dataDict['iteration'] = self.iteration
             # check if the job told us it's finished and set running flag to False if so.
@@ -798,12 +953,6 @@ class RunWFS(QtCore.QObject):
                 if dataDict['message'] == 'finished':
                     self.running = False
 
-            if self.running == False:
-                # if the stop button was pressed, send a stop message to the job.
-                self.socket1.send("stop")
-            else:
-                # otherwise, just send a message to the job that the data was received.
-                self.socket1.send("received")
 
             # send the data to the GUI
             self.triggerPlot.emit(dataDict)
@@ -813,22 +962,32 @@ class RunWFS(QtCore.QObject):
         except:
             # just send an empty dictionary if something didn't work.
             self.triggerPlot.emit({})
+            #print('no data')
 
         # if we want to keep running, call the function again to keep the loop running.
         # Cap updates at 20 Hz.
         if self.running:
-            QtCore.QTimer.singleShot(50, self._update)
+            QtCore.QTimer.singleShot(200, self._update)
         else:
             # if we want to stop, tell the GUI we're stopping and close the socket.
             self.triggerStop.emit()
             self.socket1.close()
+            
+            if self.jobType == 'local':
+                command_string = "ssh %s 'killall python -u seaberg'" % self.psana
+                subprocess.Popen(['/bin/bash','-c',command_string])
+          
+            elif self.jobType == 'live':
+                command_string = "ssh %s 'killall python -u seaberg'" % self.mon_node
+                subprocess.Popen(['/bin/bash','-c',command_string])
 
-            # try to kill the batch process if it isn't already finished.
-            command_string = 'bkill '+self.jobID
-            subprocess.Popen(['/bin/bash','-c',command_string])
-            # send the command a second time after half a second.
-            time.sleep(.5)
-            subprocess.Popen(['/bin/bash','-c',command_string])
+            elif self.jobType == 'batch':
+                # try to kill the batch process if it isn't already finished.
+                command_string = 'bkill '+self.jobID
+                subprocess.Popen(['/bin/bash','-c',command_string])
+                # send the command a second time after half a second.
+                time.sleep(.5)
+                subprocess.Popen(['/bin/bash','-c',command_string])
 
     def stop(self):
         """
