@@ -321,7 +321,7 @@ def runclient(args,pars,comm,rank,size):
             # normalize to maximum
             #img0 = img0/np.max(img0)
             md.addarray('F0',focus)
-            md.addarray('img0',img0)
+            md.addarray('img0',img1)
             md.addarray('x_res',x_res)
             md.addarray('y_res',y_res)
             md.addarray('x_vis',x_vis)
