@@ -244,7 +244,7 @@ def runclient(args,pars,comm,rank,size):
             y_Talbot_full_lineout = pitch.TalbotLineout(lineout_y, fc, fraction)
 
             x_pitch_full = x_Talbot_full_lineout.x_pitch
-            y_pitch_full = y_Talbot_full_lineout.y_pitch
+            y_pitch_full = y_Talbot_full_lineout.x_pitch
 
             # x_pitch_full,x_res_full,x_prime_full = calc_pitch(lineout_x,fc,fraction)
             # y_pitch_full,y_res_rull,y_prime_full = calc_pitch(lineout_y,fc,fraction)
