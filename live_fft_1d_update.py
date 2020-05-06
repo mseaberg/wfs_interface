@@ -446,15 +446,15 @@ def runmaster(nClients,args,pars,comm,rank,size):
             dataDict['y_pitch'] = update(md.y_pitch,dataDict['y_pitch'])
             dataDict['x_pitch_full'] = update(md.x_pitch_full,dataDict['x_pitch_full'])
             dataDict['y_pitch_full'] = update(md.y_pitch_full,dataDict['y_pitch_full'])
-            # dataDict['x_res'] = update(np.pad(md.x_res,(0,xlength-np.size(md.x_res)),'constant'),
-            #         dataDict['x_res'])
-            dataDict['x_res'] = update(md.x_res, dataDict['x_res'])
-            # dataDict['x_prime'] = update(np.pad(md.x_prime,(0,xlength-np.size(md.x_prime)),'constant'),
-            #         dataDict['x_prime'])
-            # dataDict['y_res'] = update(np.pad(md.y_res,(0,ylength-np.size(md.y_res)),'constant'),
-            #         dataDict['y_res'])
-            # dataDict['y_prime'] = update(np.pad(md.y_prime,(0,ylength-np.size(md.y_prime)),'constant'),
-            #         dataDict['y_prime'])
+            dataDict['x_res'] = update(np.pad(md.x_res,(0,xlength-np.size(md.x_res)),'constant'),
+                    dataDict['x_res'])
+            # dataDict['x_res'] = update(md.x_res, dataDict['x_res'])
+            dataDict['x_prime'] = update(np.pad(md.x_prime,(0,xlength-np.size(md.x_prime)),'constant'),
+                    dataDict['x_prime'])
+            dataDict['y_res'] = update(np.pad(md.y_res,(0,ylength-np.size(md.y_res)),'constant'),
+                    dataDict['y_res'])
+            dataDict['y_prime'] = update(np.pad(md.y_prime,(0,ylength-np.size(md.y_prime)),'constant'),
+                    dataDict['y_prime'])
             j1 = 0
             for key in epics_keys:
                 dataDict[key] = update(md.epics_values[j1],dataDict[key])
