@@ -278,7 +278,7 @@ def runclient(args,pars,comm,rank,size):
             }
 
             talbot_image = pitch.TalbotImage(img0, fc, fraction)
-            recovered, focus, wfs_param = talbot_image.get_legendre(fit_object, param)
+            recovered, focus, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
 
             zx, x_prime, x_res = x_Talbot_lineout.normal_integration(param)
             zy, y_prime, y_res = y_Talbot_lineout.normal_integration(param)
@@ -319,6 +319,7 @@ def runclient(args,pars,comm,rank,size):
 
             wave = fit_object.wavefront_fit(wfs_param['coeff'])
             wave = (wave-np.min(wave))/(np.max(wave)-np.min(wave))
+            wave *= (np.abs(recovered)>0)
 
             focus = np.abs(focus)/np.max(np.abs(focus))/10
             # normalize to maximum
