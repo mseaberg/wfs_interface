@@ -277,8 +277,15 @@ def runclient(args,pars,comm,rank,size):
                 'downsample': downsample
             }
 
-            talbot_image = pitch.TalbotImage(img0, fc, fraction)
-            recovered, focus, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
+            if pars['2D']:
+                talbot_image = pitch.TalbotImage(img0, fc, fraction)
+                recovered, focus, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
+
+                wave = fit_object.wavefront_fit(wfs_param['coeff'])
+                wave = (wave - np.min(wave)) / (np.max(wave) - np.min(wave))
+                wave *= (np.abs(recovered) > 0)
+
+                focus = np.abs(focus) / np.max(np.abs(focus)) / 10
 
             zx, x_prime, x_res = x_Talbot_lineout.normal_integration(param)
             zy, y_prime, y_res = y_Talbot_lineout.normal_integration(param)
@@ -316,16 +323,14 @@ def runclient(args,pars,comm,rank,size):
             # normalize to maximum
             F0 = F0/np.max(F0)
             F0 += x_mask + y_mask
-
-            wave = fit_object.wavefront_fit(wfs_param['coeff'])
-            wave = (wave-np.min(wave))/(np.max(wave)-np.min(wave))
-            wave *= (np.abs(recovered)>0)
-
-            focus = np.abs(focus)/np.max(np.abs(focus))/10
             # normalize to maximum
             #img0 = img0/np.max(img0)
-            md.addarray('F0',focus)
-            md.addarray('img0',wave)
+            if pars['2D']:
+                md.addarray('F0',focus)
+                md.addarray('img0',wave)
+            else:
+                md.addarray('F0', F0)
+                md.addarray('img0', img1)
             md.addarray('x_res',x_res)
             md.addarray('y_res',y_res)
             md.addarray('x_vis',x_vis)
