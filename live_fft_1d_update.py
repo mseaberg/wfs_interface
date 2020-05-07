@@ -3,6 +3,7 @@ import sys
 from lcls_beamline_toolbox.xraybeamline2d import pitch
 from lcls_beamline_toolbox.xraybeamline2d.util import Util
 from lcls_beamline_toolbox.polyprojection.legendre import LegendreFit2D
+from lcls_beamline_toolbox.xraybeamline2d.beam import Beam
 from beam import *
 from psana import *
 from skimage.transform import downscale_local_mean
@@ -274,16 +275,19 @@ def runclient(args,pars,comm,rank,size):
                 'dx': dx,
                 'zT': zT,
                 'lambda0': lambda0,
-                'downsample': downsample
+                'downsample': downsample,
+                'zf': zf
             }
 
             if pars['2D']:
                 talbot_image = pitch.TalbotImage(img0, fc, fraction)
-                recovered, focus, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
+                recovered_beam, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
 
                 wave = fit_object.wavefront_fit(wfs_param['coeff'])
                 wave = (wave - np.min(wave)) / (np.max(wave) - np.min(wave))
-                wave *= (np.abs(recovered) > 0)
+                wave *= (np.abs(recovered_beam.wave) > 0)
+
+                focus = recovered_beam.beam_prop(-zT-zf)
 
                 focus = np.abs(focus) / np.max(np.abs(focus)) / 10
 
