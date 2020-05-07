@@ -287,7 +287,8 @@ def runclient(args,pars,comm,rank,size):
                 wave = (wave - np.min(wave)) / (np.max(wave) - np.min(wave))
                 wave *= (np.abs(recovered_beam.wave) > 0)
 
-                focus = recovered_beam.beam_prop(-zT-zf)
+                recovered_beam.beam_prop(-zT-zf)
+                focus = recovered_beam.wave
 
                 focus = np.abs(focus) / np.max(np.abs(focus)) / 10
 
