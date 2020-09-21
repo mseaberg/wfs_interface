@@ -68,9 +68,12 @@ def runclient(args,pars,comm,rank,size):
     N = ymax-ymin
     M = xmax-xmin
 
+    Nd = 0
+    Md = 0
+
     if pars['2D']:
-        Nd = int(2048/(2**downsample))
-        Md = int(2048/(2**downsample))
+        Nd = int(N/(2**downsample))
+        Md = int(M/(2**downsample))
         fit_object = LegendreFit2D(Nd, Md, order)
 
     f_x = np.linspace(-M/2.,M/2.-1.,M)/M/dx
@@ -158,7 +161,7 @@ def runclient(args,pars,comm,rank,size):
 
             img1 = img0[ymin:ymax,xmin:xmax]
 
-            if np.sum(img1)<0.5e7:continue
+            if np.sum(img1)<1e5:continue
 
             N,M = np.shape(img1)
             #print(N)
@@ -173,7 +176,10 @@ def runclient(args,pars,comm,rank,size):
 
             j1 = 0
             for key in epics_keys:
-                epics_values[j1] = np.array(epics.value(key))
+                try:
+                    epics_values[j1] = np.array(epics.value(key))
+                except ValueError:
+                    print("can't read %s value" % key)
                 j1 += 1
 
 
@@ -193,7 +199,10 @@ def runclient(args,pars,comm,rank,size):
             else:
                 zD = epics.value(pars['det_z'])*1e-3
             #zD = 0.0
-            zG = epics.value(pars['grating_z'])*1.e-3
+            if epics.value(pars['grating_z']) is None:
+                zG = 0.0
+            else:
+                zG = epics.value(pars['grating_z'])*1.e-3
             # distance from grating to focus
             zf = pars['zf'] + zG
             # distance from grating to detector
@@ -209,8 +218,10 @@ def runclient(args,pars,comm,rank,size):
 
             x_mask = ((f_x-fc/dx)**2+f_y**2)<(fc/4/dx)**2
             x_mask = x_mask*(((f_x-fc/dx)**2+f_y**2)>(fc/4./dx-2./M/dx)**2)
+            x_mask = x_mask.astype(float)
             y_mask = ((f_x)**2+(f_y-fc/dx)**2)<(fc/4/dx)**2
             y_mask = y_mask*(((f_x)**2+(f_y-fc/dx)**2)>(fc/4./dx-2./N/dx)**2)
+            y_mask = y_mask.astype(float)
 
             lineout_x = Util.get_horizontal_lineout(img1, half_width=lineout_width/2)
             lineout_y = Util.get_vertical_lineout(img1, half_width=lineout_width/2)
@@ -279,19 +290,6 @@ def runclient(args,pars,comm,rank,size):
                 'zf': zf
             }
 
-            if pars['2D']:
-                talbot_image = pitch.TalbotImage(img0, fc, fraction)
-                recovered_beam, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
-
-                wave = fit_object.wavefront_fit(wfs_param['coeff'])
-                wave = (wave - np.min(wave)) / (np.max(wave) - np.min(wave))
-                wave *= (np.abs(recovered_beam.wave) > 0)
-
-                recovered_beam.beam_prop(-zT-zf)
-                focus = recovered_beam.wave
-
-                focus = np.abs(focus) / np.max(np.abs(focus)) / 10
-
             zx, x_prime, x_res = x_Talbot_lineout.normal_integration(param)
             zy, y_prime, y_res = y_Talbot_lineout.normal_integration(param)
 
@@ -302,6 +300,40 @@ def runclient(args,pars,comm,rank,size):
             # positive means focus is downstream of IP.
             zf_x = -(zx - zT - zf)*1e3
             zf_y = -(zy - zT - zf)*1e3
+
+            x_width = np.std(x_res)
+            y_width = np.std(y_res)
+
+            if pars['2D']:
+                talbot_image = pitch.TalbotImage(img0, fc, fraction)
+                recovered_beam, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
+
+                wave = fit_object.wavefront_fit(wfs_param['coeff'])
+                mask = np.abs(recovered_beam.wave[256-Nd/2:256+Nd/2,256-Md/2:256+Md/2]) > 0
+                wave *= mask
+               
+                mask_x = mask[Nd/2,:]
+                mask_y = mask[:,Md/2]
+
+                x_prime = recovered_beam.x[256,256-Md/2:256+Md/2]*1e6
+                y_prime = recovered_beam.y[256-Nd/2:256+Nd/2,256]*1e6
+                x_prime = x_prime[mask_x]
+                y_prime = y_prime[mask_y]
+                x_res = wave[Nd/2,:][mask_x]
+                y_res = wave[:,Md/2][mask_y]
+                print('x_res: %d' % np.size(x_res))
+
+                x_width = np.std(x_res)
+                y_width = np.std(y_res)
+
+                recovered_beam.beam_prop(-zT-zf)
+                focus = recovered_beam.wave
+
+                focus = np.abs(focus)**2 / np.max(np.abs(focus)**2) / 10
+                zf_x = -recovered_beam.zx*1e3
+                zf_y = -recovered_beam.zy*1e3
+                
+                wave = (wave - np.min(wave)) / (np.max(wave) - np.min(wave))
 
             # zf_x = -(zT*mag_x/(mag_x-1.) - zT - zf)*1e3
             # zf_y = -(zT*mag_y/(mag_y-1.) - zT - zf)*1e3
@@ -318,10 +350,6 @@ def runclient(args,pars,comm,rank,size):
             # py = np.polyfit(y_prime,y_res,2)
             # x_res = x_res - px[0]*x_prime**2 - px[1]*x_prime - px[2]
             # y_res = y_res - py[0]*y_prime**2 - py[1]*y_prime - py[2]
-
-            x_width = np.std(x_res)
-            y_width = np.std(y_res)
-
             img1 = img1/np.max(img1)
 
             #F0 = np.abs(Beam.NFFT(img0))

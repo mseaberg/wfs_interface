@@ -16,6 +16,7 @@ import socket
 import subprocess
 import zmq
 import ConfigParser
+import argparse
 
 Ui_MainWindow, QMainWindow = loadUiType('WFS_form.ui')
 Ui_Plot, QPlot = loadUiType('WFS_plot.ui')
@@ -37,7 +38,7 @@ class App(QMainWindow, Ui_MainWindow):
     triggerStart = QtCore.pyqtSignal(str)
     triggerStop = QtCore.pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, input_args):
         """
         Set up interface
         """
@@ -45,6 +46,11 @@ class App(QMainWindow, Ui_MainWindow):
         QMainWindow.__init__(self)
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
+    
+        parser = argparse.ArgumentParser(prog=input_args[0])
+        parser.add_argument("-b","--hutch", help="hutch name", type=str, default='CXI')
+        parser.add_argument("-e","--experiment", help="experiment number", type=str, default='cxix28716')
+        args = parser.parse_args(input_args[1:])
 
         ## button callbacks
         self.runPushButton.clicked.connect(self.change_state)
@@ -138,7 +144,8 @@ class App(QMainWindow, Ui_MainWindow):
         ## colormap for images
         colormap = cm.get_cmap("gnuplot")
         colormap._init()
-        self.lut = (colormap._lut * 255).view(np.ndarray)
+        self.lut = (colormap._lut * 255).view(np.ndarray)[:256,:]
+        self.lut[-1,:] = 255
 
         self.runstring = ''
 
@@ -147,16 +154,30 @@ class App(QMainWindow, Ui_MainWindow):
         self.set_experiment()
         self.set_run()
 
+        try:
+            index = self.hutchComboBox.findText(args.hutch, QtCore.Qt.MatchFixedString)
+        except:
+            index = 0
+
+
         ## set default experiment and run
-        index = self.hutchComboBox.findText('CXI',QtCore.Qt.MatchFixedString)
+        #index = self.hutchComboBox.findText('CXI',QtCore.Qt.MatchFixedString)
         if index >= 0:
             self.hutchComboBox.setCurrentIndex(index)
         self.set_hutch()
-        index = self.experimentComboBox.findText('cxix28716',QtCore.Qt.MatchFixedString)
+
+        try:
+            index = self.experimentComboBox.findText(args.experiment, QtCore.Qt.MatchFixedString)
+        except:
+            index = 0
+
+
+        #index = self.experimentComboBox.findText('cxix28716',QtCore.Qt.MatchFixedString)
         if index >= 0:
             self.experimentComboBox.setCurrentIndex(index)
         self.set_experiment()
-        self.runnumberEdit.setText('100')
+
+        #self.runnumberEdit.setText('100')
         self.set_run()
 
         ## initialize various attributes
@@ -164,7 +185,11 @@ class App(QMainWindow, Ui_MainWindow):
         self.pars = {}
         self.data_dict = {}
         self.data_dict['key_list'] = []
-        self.config = 'config/wfs.cfg'
+        
+        try:
+            self.config = 'config/%s.cfg' % args.experiment
+        except:
+            self.config = 'config/wfs.cfg'
 
     def load_config(self):
         """
@@ -397,7 +422,7 @@ class App(QMainWindow, Ui_MainWindow):
             F0[F0>.1] = 0.1
             # update images
             self.rawImg.setImage(np.flipud(self.data_dict['raw_image']).T,levels=(0,1),lut=self.lut)
-            self.fftImg.setImage(np.flipud(F0).T,levels=(0,.101),lut=self.lut)
+            self.fftImg.setImage(np.flipud(F0).T,levels=(0,.1),lut=self.lut)
             # update plots
             self.focus_x.setData(self.data_dict['event_number'],self.data_dict['x_focus_position'])
             self.focus_x_smooth.setData(self.data_dict['event_number'],self.data_dict['x_smooth'])
@@ -415,7 +440,8 @@ class App(QMainWindow, Ui_MainWindow):
             if self.data_dict['iteration'] == 0:
                 N,M = np.shape(self.data_dict['raw_image'])
                 self.update_viewbox(self.rawView,M,N,self.rawRect)
-                self.update_viewbox(self.fftView,M,N,self.fftRect)
+                N2,M2 = np.shape(F0)
+                self.update_viewbox(self.fftView,M2,N2,self.fftRect)
                 for plot in self.plots:
                     plot.populate_combobox(self.data_dict['key_list'])
             # update any AMI-style plots
@@ -450,7 +476,7 @@ class App(QMainWindow, Ui_MainWindow):
         viewbox.setAspectLocked(True)
         viewbox.setRange(QtCore.QRectF(0,0,width,width))
         rect1 = QtGui.QGraphicsRectItem(0,0,width,width)
-        rect1.setPen(QPen(Qt.white, int(width/100), Qt.SolidLine))
+        rect1.setPen(QPen(Qt.white, int(width/50), Qt.SolidLine))
         viewbox.addItem(rect1)
         return rect1
 
@@ -465,7 +491,8 @@ class App(QMainWindow, Ui_MainWindow):
         """
         viewbox.setRange(QtCore.QRectF(0,0,width,height))
         rect.setRect(0,0,width,height)
-        
+        rect.setPen(QPen(Qt.white, int(width/50), Qt.SolidLine))
+
 
     def closeEvent(self, event):
         """
@@ -534,6 +561,7 @@ class Config(QConfig, Ui_Config):
         self.lineEdit_detName.setText(pars['detName'])
         self.lineEdit_rotation.setText(str(pars['angle']))
         self.lineEdit_update.setText(str(pars['update_events']))
+        self.lineEdit_2D.setText(str(pars['2D']))
 
         epics_list = pars['epics_keys']
         epics_text = '\n'.join(epics_list)
@@ -552,6 +580,7 @@ class Config(QConfig, Ui_Config):
         config_parser.set('Main','exp_name',self.parent.experiment)
         config_parser.set('Main','energy',str(self.lineEdit_energy.text()))
         config_parser.set('Main','live',str(self.parent.liveCheckBox.isChecked()))
+        config_parser.set('Main','2D',str(self.lineEdit_2D.text()))
         config_parser.add_section('Processing')
         roi = [x.strip() for x in str(self.lineEdit_ROI.text()).split(',')]
         config_parser.set('Processing','xmin',roi[0])
@@ -891,7 +920,7 @@ class RunWFS(QtCore.QObject):
 
         elif jobType == 'live':
             # figure out machine to run on
-            self.mon_node = 'daq-%s-mon06' % self.hutch.lower()
+            self.mon_node = 'daq-%s-mon07' % self.hutch.lower()
             print(self.mon_node)
             command_string = ('./start_live.sh %s %s %s %s %s %s'
                     % (self.mon_node, self.hutch, self.experiment, self.runnumber,
@@ -1000,7 +1029,12 @@ class RunWFS(QtCore.QObject):
 
 # run the program
 if __name__ == "__main__":
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument("-b","--hutch", help="hutch name", type=str, default='CXI')
+    #parser.add_argument("-e","--experiment", help="experiment number", type=str, default='cxix28716')
+    #args = parser.parse_args()
+
     app = QtGui.QApplication(sys.argv)
-    myapp = App()
+    myapp = App(sys.argv)
     myapp.show()
     sys.exit(app.exec_())
