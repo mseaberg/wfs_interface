@@ -42,6 +42,7 @@ def runclient(args,pars,comm,rank,size):
     epics_keys = pars['epics_keys']
     downsample = pars['downsample']
     order = pars['order']
+    flip_sign = pars['flip_sign']
 
     # number of scan plots
     numPlots = len(pars['plot_list'])
@@ -72,8 +73,8 @@ def runclient(args,pars,comm,rank,size):
     Md = 0
 
     if pars['2D']:
-        Nd = int(N/(2**downsample))
-        Md = int(M/(2**downsample))
+        Nd = int(np.floor(N/(2**downsample)))
+        Md = int(np.floor(M/(2**downsample)))
         fit_object = LegendreFit2D(Nd, Md, order)
 
     f_x = np.linspace(-M/2.,M/2.-1.,M)/M/dx
@@ -159,7 +160,7 @@ def runclient(args,pars,comm,rank,size):
             # check if the image needs to be rotated
             img0 = interpolate.rotate(img0,pars['angle'],reshape=False)
 
-            img1 = img0[ymin:ymax,xmin:xmax]
+            img1 = np.flipud(img0[ymin:ymax,xmin:xmax])
 
             if np.sum(img1)<1e5:continue
 
@@ -305,7 +306,7 @@ def runclient(args,pars,comm,rank,size):
             y_width = np.std(y_res)
 
             if pars['2D']:
-                talbot_image = pitch.TalbotImage(img0, fc, fraction)
+                talbot_image = pitch.TalbotImage(img1, fc, fraction)
                 recovered_beam, wfs_param = talbot_image.get_legendre(fit_object, param, threshold=.1)
 
                 wave = fit_object.wavefront_fit(wfs_param['coeff'])
@@ -433,32 +434,34 @@ def runmaster(nClients,args,pars,comm,rank,size):
 
     # initialize arrays
 
+    N_event = 5000
+
     dataDict = {}
-    dataDict['nevents'] = np.ones(30000)*-1
-    dataDict['zf_x'] = np.zeros(30000)
-    dataDict['zf_y'] = np.zeros(30000)
-    dataDict['x_width'] = np.zeros(30000)
-    dataDict['y_width'] = np.zeros(30000)
-    dataDict['x_prime'] = np.zeros((30000,xlength))
-    dataDict['x_res'] = np.zeros((30000,xlength))
-    dataDict['y_prime'] = np.zeros((30000,ylength))
-    dataDict['y_res'] = np.zeros((30000,ylength))
-    dataDict['x_pitch'] = np.zeros(30000)
-    dataDict['y_pitch'] = np.zeros(30000)
-    dataDict['x_pitch_full'] = np.zeros(30000)
-    dataDict['y_pitch_full'] = np.zeros(30000)
-    dataDict['x_grad'] = np.zeros(30000)
-    dataDict['y_grad'] = np.zeros(30000)
-    dataDict['scanPos'] = np.zeros(30000)
-    dataDict['intensity'] = np.zeros(30000)
-    dataDict['L3E'] = np.zeros(30000)
-    dataDict['BC2'] = np.zeros(30000)
-    dataDict['x_vis'] = np.zeros(30000)
-    dataDict['y_vis'] = np.zeros(30000)
-    dataDict['x_vis2'] = np.zeros(30000)
-    dataDict['y_vis2'] = np.zeros(30000)
+    dataDict['nevents'] = np.ones(N_event)*-1
+    dataDict['zf_x'] = np.zeros(N_event)
+    dataDict['zf_y'] = np.zeros(N_event)
+    dataDict['x_width'] = np.zeros(N_event)
+    dataDict['y_width'] = np.zeros(N_event)
+    dataDict['x_prime'] = np.zeros((N_event,xlength))
+    dataDict['x_res'] = np.zeros((N_event,xlength))
+    dataDict['y_prime'] = np.zeros((N_event,ylength))
+    dataDict['y_res'] = np.zeros((N_event,ylength))
+    dataDict['x_pitch'] = np.zeros(N_event)
+    dataDict['y_pitch'] = np.zeros(N_event)
+    dataDict['x_pitch_full'] = np.zeros(N_event)
+    dataDict['y_pitch_full'] = np.zeros(N_event)
+    dataDict['x_grad'] = np.zeros(N_event)
+    dataDict['y_grad'] = np.zeros(N_event)
+    dataDict['scanPos'] = np.zeros(N_event)
+    dataDict['intensity'] = np.zeros(N_event)
+    dataDict['L3E'] = np.zeros(N_event)
+    dataDict['BC2'] = np.zeros(N_event)
+    dataDict['x_vis'] = np.zeros(N_event)
+    dataDict['y_vis'] = np.zeros(N_event)
+    dataDict['x_vis2'] = np.zeros(N_event)
+    dataDict['y_vis2'] = np.zeros(N_event)
     for key in epics_keys:
-        dataDict[key] = np.zeros(30000)
+        dataDict[key] = np.zeros(N_event)
 
     roi = pars['roi']
     xmin = roi[0]
@@ -547,6 +550,8 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 zf_y = dataDict['zf_y'][mask][order]
                 x_width = dataDict['x_width'][mask][order]
                 y_width = dataDict['y_width'][mask][order]
+                x_pitch = dataDict['x_pitch'][mask][order]
+                y_pitch = dataDict['y_pitch'][mask][order]
                 
 
 
@@ -577,13 +582,16 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 send_dict['y_focus_position'] = zf_y
                 send_dict['x_phase_rms'] = x_width
                 send_dict['y_phase_rms'] = y_width
+                send_dict['x_pitch'] = x_pitch
+                send_dict['y_pitch'] = y_pitch
                 send_dict['x_smooth'] = x_smooth
                 send_dict['y_smooth'] = y_smooth
                 send_dict['xw_smooth'] = xw_smooth
                 send_dict['yw_smooth'] = yw_smooth
 
                 send_dict['key_list'] = ['event_number','x_focus_position',
-                        'y_focus_position','x_phase_rms','y_phase_rms']
+                        'y_focus_position','x_phase_rms','y_phase_rms', 
+                        'x_pitch', 'y_pitch']
 
                 for key in epics_keys:
                     send_dict['key_list'].append(key)

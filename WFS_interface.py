@@ -7,6 +7,7 @@ from PyQt4.uic import loadUiType
 from PyQt4.QtGui import QPen
 from PyQt4.QtCore import Qt
 import sys
+import getpass
 import os
 import time
 import wfs_utils
@@ -38,7 +39,7 @@ class App(QMainWindow, Ui_MainWindow):
     triggerStart = QtCore.pyqtSignal(str)
     triggerStop = QtCore.pyqtSignal()
 
-    def __init__(self, input_args):
+    def __init__(self, parent=None, args=None):
         """
         Set up interface
         """
@@ -47,10 +48,18 @@ class App(QMainWindow, Ui_MainWindow):
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
     
-        parser = argparse.ArgumentParser(prog=input_args[0])
-        parser.add_argument("-b","--hutch", help="hutch name", type=str, default='CXI')
-        parser.add_argument("-e","--experiment", help="experiment number", type=str, default='cxix28716')
-        args = parser.parse_args(input_args[1:])
+        #parser = argparse.ArgumentParser(prog=input_args[0])
+        #parser.add_argument("-b","--hutch", help="hutch name", type=str, default='CXI')
+        #parser.add_argument("-e","--experiment", help="experiment number", type=str, default='cxix28716')
+        #args = parser.parse_args(input_args[1:])
+
+        if args is not None:
+            print(args.experiment)
+            experiment = args.experiment
+        else:
+            experiment = 'cxix28716'
+
+        hutch = experiment[0:3].upper()
 
         ## button callbacks
         self.runPushButton.clicked.connect(self.change_state)
@@ -155,7 +164,7 @@ class App(QMainWindow, Ui_MainWindow):
         self.set_run()
 
         try:
-            index = self.hutchComboBox.findText(args.hutch, QtCore.Qt.MatchFixedString)
+            index = self.hutchComboBox.findText(hutch, QtCore.Qt.MatchFixedString)
         except:
             index = 0
 
@@ -167,7 +176,7 @@ class App(QMainWindow, Ui_MainWindow):
         self.set_hutch()
 
         try:
-            index = self.experimentComboBox.findText(args.experiment, QtCore.Qt.MatchFixedString)
+            index = self.experimentComboBox.findText(experiment, QtCore.Qt.MatchFixedString)
         except:
             index = 0
 
@@ -416,12 +425,18 @@ class App(QMainWindow, Ui_MainWindow):
 
             self.data_dict = data_dict
 
+            if self.levelsWidget.auto:
+                levels = (0,1)
+                self.levelsWidget.setText(0,1)
+            else:
+                levels = (self.levelsWidget.minimum, self.levelsWidget.maximum)
+
             # FFT data
             F0 = self.data_dict['FFT']
             # FFT display threshold
             F0[F0>.1] = 0.1
             # update images
-            self.rawImg.setImage(np.flipud(self.data_dict['raw_image']).T,levels=(0,1),lut=self.lut)
+            self.rawImg.setImage(np.flipud(self.data_dict['raw_image']).T,levels=levels,lut=self.lut)
             self.fftImg.setImage(np.flipud(F0).T,levels=(0,.1),lut=self.lut)
             # update plots
             self.focus_x.setData(self.data_dict['event_number'],self.data_dict['x_focus_position'])
@@ -861,6 +876,7 @@ class RunWFS(QtCore.QObject):
         # set iteration number to zero
         self.iteration = 0
         self.psana = 'psana'
+        self.user = getpass.getuser()
          
     
     def start(self,jobType):
@@ -920,7 +936,7 @@ class RunWFS(QtCore.QObject):
 
         elif jobType == 'live':
             # figure out machine to run on
-            self.mon_node = 'daq-%s-mon07' % self.hutch.lower()
+            self.mon_node = 'daq-%s-mon03' % self.hutch.lower()
             print(self.mon_node)
             command_string = ('./start_live.sh %s %s %s %s %s %s'
                     % (self.mon_node, self.hutch, self.experiment, self.runnumber,
@@ -1004,11 +1020,11 @@ class RunWFS(QtCore.QObject):
             
             if self.jobType == 'local':
                 print(self.psana)
-                command_string = "ssh %s 'killall python -u seaberg'" % self.psana
+                command_string = "ssh %s 'killall python -u %s'" % (self.psana, self.user)
                 subprocess.Popen(['/bin/bash','-c',command_string])
           
             elif self.jobType == 'live':
-                command_string = "ssh %s 'killall python -u seaberg'" % self.mon_node
+                command_string = "ssh %s 'killall python -u %s'" % (self.mon_node, self.user)
                 subprocess.Popen(['/bin/bash','-c',command_string])
 
             elif self.jobType == 'batch':
@@ -1028,13 +1044,13 @@ class RunWFS(QtCore.QObject):
 
 
 # run the program
-if __name__ == "__main__":
-    #parser = argparse.ArgumentParser()
-    #parser.add_argument("-b","--hutch", help="hutch name", type=str, default='CXI')
-    #parser.add_argument("-e","--experiment", help="experiment number", type=str, default='cxix28716')
+#if __name__ == "__main__":
+#    parser = argparse.ArgumentParser()
+#    parser.add_argument("-b","--hutch", help="hutch name", type=str, default='CXI')
+#    parser.add_argument("-e","--experiment", help="experiment number", type=str, default='cxix28716')
     #args = parser.parse_args()
 
-    app = QtGui.QApplication(sys.argv)
-    myapp = App(sys.argv)
-    myapp.show()
-    sys.exit(app.exec_())
+#    app = QtGui.QApplication(sys.argv)
+#    myapp = App(sys.argv)
+#    myapp.show()
+#    sys.exit(app.exec_())

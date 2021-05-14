@@ -38,6 +38,10 @@ def parse_wfs_config_gui(configFile):
     pars['order'] = config.getint('Processing','order')
     epics_str = config.get('Processing','epics_keys')
     pars['epics_keys'] = [x.strip() for x in epics_str.split(',')]
+    try:
+        pars['flip_sign'] = config.getboolean('Setup', 'flip_sign')
+    except:
+        pars['flip_sign'] = False
 
 
     return pars

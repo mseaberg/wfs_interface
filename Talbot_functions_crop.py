@@ -145,9 +145,9 @@ def calc_gradients(image, dx, dg, lambda0, peak, zT, downsample=3):
     # crop out center of Fourier pattern to downsample
     down = (2**downsample)*2
 
-    v_fourier = v_fourier[N/2-N/down:N/2+N/down,M/2-M/down:M/2+M/down]
-    h_fourier = h_fourier[N/2-N/down:N/2+N/down,M/2-M/down:M/2+M/down]
-    zero_fourier = zero_fourier[N/2-N/down:N/2+N/down,M/2-M/down:M/2+M/down]
+    v_fourier = v_fourier[np.floor(N/2)-np.floor(N/down):np.floor(N/2)+np.floor(N/down),np.floor(M/2)-np.floor(M/down):np.floor(M/2)+np.floor(M/down)]
+    h_fourier = h_fourier[np.floor(N/2)-np.floor(N/down):np.floor(N/2)+np.floor(N/down),np.floor(M/2)-np.floor(M/down):np.floor(M/2)+np.floor(M/down)]
+    zero_fourier = zero_fourier[np.floor(N/2)-np.floor(N/down):np.floor(N/2)+np.floor(N/down),np.floor(M/2)-np.floor(M/down):np.floor(M/2)+np.floor(M/down)]
 
     # downsampled array size
     N2,M2 = np.shape(v_fourier)
