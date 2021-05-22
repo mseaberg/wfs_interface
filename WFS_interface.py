@@ -3,9 +3,9 @@ import warnings
 from matplotlib import cm
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
-from PyQt4.uic import loadUiType
-from PyQt4.QtGui import QPen
-from PyQt4.QtCore import Qt
+from PyQt5.uic import loadUiType
+from PyQt5.QtGui import QPen
+from PyQt5.QtCore import Qt
 import sys
 import getpass
 import os

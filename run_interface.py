@@ -6,7 +6,7 @@ import argparse
 
 def process_cl_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-e', '--experiment', action='store')
+    parser.add_argument('-e', '--experiment', action='store', default='cxix28716')
 
     parsed_args, unparsed_args = parser.parse_known_args()
     return parsed_args, unparsed_args

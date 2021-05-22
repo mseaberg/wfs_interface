@@ -1,11 +1,11 @@
 from pyqtgraph.Qt import QtCore, QtGui
-from PyQt4.QtCore import Qt
+from PyQt5.QtCore import Qt
 import pyqtgraph as pg
-from PyQt4.uic import loadUiType
+from PyQt5.uic import loadUiType
 import numpy as np
 from datetime import datetime
 from matplotlib import cm
-from PyQt4.QtGui import QPen
+from PyQt5.QtGui import QPen
 import json
 import warnings
 

@@ -555,11 +555,14 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 
 
 
-                x_smooth = pandas.rolling_mean(zf_x,10,center=True)
-                y_smooth = pandas.rolling_mean(zf_y,10,center=True)
-                xw_smooth = pandas.rolling_mean(x_width,10,center=True)
-                yw_smooth = pandas.rolling_mean(y_width,10,center=True)
-                
+                #x_smooth = pandas.rolling_mean(zf_x,10,center=True)
+                #y_smooth = pandas.rolling_mean(zf_y,10,center=True)
+                #xw_smooth = pandas.rolling_mean(x_width,10,center=True)
+                #yw_smooth = pandas.rolling_mean(y_width,10,center=True)
+                x_smooth = running_average(zf_x, 10)
+                y_smooth = running_average(zf_y, 10)
+                xw_smooth = running_average(x_width, 10)
+                yw_smooth = running_average(y_width, 10)
 
 
                 send_dict1 = {}
@@ -618,7 +621,7 @@ def runmaster(nClients,args,pars,comm,rank,size):
     socket1.close()
 
                
-    fileName = '/reg/d/psdm/'+pars['hutch']+'/'+pars['hutch']+pars['exp_name']+'/results/wfs/'+args.run+'_data2.h5'
+    fileName = '/reg/d/psdm/'+pars['hutch'].lower()+'/'+pars['exp_name'].lower()+'/results/wfs/'+args.run+'_data2.h5'
 
     mask = dataDict['nevents'] >= 0
 
@@ -633,8 +636,6 @@ def runmaster(nClients,args,pars,comm,rank,size):
         for key in dataDict.keys():
             f.create_dataset(key, data=dataDict[key])
 
-
-
 def update(newValue,currentArray):
 
     if len(np.shape(currentArray))>1:
@@ -646,4 +647,6 @@ def update(newValue,currentArray):
     return currentArray
 
 
-
+def running_average(arr, window):
+    out = pandas.Series(arr).rolling(window, min_periods=1).mean().values
+    return out

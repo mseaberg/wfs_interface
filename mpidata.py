@@ -28,7 +28,7 @@ class mpidata(object):
         comm.send(self.small,dest=0,tag=rank)
 
     def addarray(self,name,array):
-        self.arraylist.append(array)
+        self.arraylist.append(np.ascontiguousarray(array))
         self.small.addarray(name,array)
 
     def send(self):
