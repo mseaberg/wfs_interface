@@ -85,7 +85,8 @@ def runclient(args,pars,comm,rank,size):
 
 
     calibDir = '/reg/d/psdm/%s/%s/calib' % (hutchName, expName)
-    
+    #calibDir = '/cds/home/opr/cxiopr/experiments/%s/calib' % (expName)
+
     ds = []
     if sh_mem:
         
@@ -162,7 +163,7 @@ def runclient(args,pars,comm,rank,size):
 
             img1 = np.flipud(img0[ymin:ymax,xmin:xmax])
 
-            if np.sum(img1)<1e5:continue
+            #if np.sum(img1)<1e5:continue
 
             N,M = np.shape(img1)
             #print(N)
@@ -178,7 +179,7 @@ def runclient(args,pars,comm,rank,size):
             j1 = 0
             for key in epics_keys:
                 try:
-                    epics_values[j1] = np.array(epics.value(key))
+                    epics_values[j1] = np.array([epics.value(key)])
                 except ValueError:
                     print("can't read %s value" % key)
                 j1 += 1
@@ -190,6 +191,7 @@ def runclient(args,pars,comm,rank,size):
             if eBeam.get(evt) is not None:
                 L3E = eBeam.get(evt).ebeamL3Energy()
                 BC2 = eBeam.get(evt).ebeamPkCurrBC2()
+
 
 
             #### find peaks ####
@@ -421,16 +423,18 @@ def runmaster(nClients,args,pars,comm,rank,size):
 
     z0 = pars['z0']
     zf = pars['zf']
+    downsample = pars['downsample']
 
     mag1 = (z0+zf)/zf
 
     pixelPeriod = mag1*dg/dx
 
-    xlength = int((xmax-xmin)/pixelPeriod*2)
-    ylength = int((ymax-ymin)/pixelPeriod*2)
+    xlength = int((xmax-xmin)/pixelPeriod*2)*2
+    ylength = int((ymax-ymin)/pixelPeriod*2)*2
     # xlength = xmax - xmin
     # ylength = ymax - ymin
-
+    print(xlength)
+    print(ylength)
 
     # initialize arrays
 
@@ -516,10 +520,12 @@ def runmaster(nClients,args,pars,comm,rank,size):
             # dataDict['x_res'] = update(md.x_res, dataDict['x_res'])
             dataDict['x_prime'] = update(np.pad(md.x_prime,(0,xlength-np.size(md.x_prime)),'constant'),
                     dataDict['x_prime'])
+            print(ylength-np.size(md.y_res))
             dataDict['y_res'] = update(np.pad(md.y_res,(0,ylength-np.size(md.y_res)),'constant'),
                     dataDict['y_res'])
             dataDict['y_prime'] = update(np.pad(md.y_prime,(0,ylength-np.size(md.y_prime)),'constant'),
                     dataDict['y_prime'])
+           
             j1 = 0
             for key in epics_keys:
                 dataDict[key] = update(md.epics_values[j1],dataDict[key])
@@ -552,7 +558,7 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 y_width = dataDict['y_width'][mask][order]
                 x_pitch = dataDict['x_pitch'][mask][order]
                 y_pitch = dataDict['y_pitch'][mask][order]
-                
+                intensity = dataDict['intensity'][mask][order]
 
 
                 #x_smooth = pandas.rolling_mean(zf_x,10,center=True)
@@ -569,6 +575,7 @@ def runmaster(nClients,args,pars,comm,rank,size):
                 send_dict = {}
                 #send_dict['raw'] = downscale_local_mean(img0,(4,4))
                 #send_dict['F0'] = downscale_local_mean(F0,(4,4))
+
                 send_dict['raw_image'] = img0
                 send_dict['FFT'] = F0
                 send_dict['x_residual_phase'] = x_res
@@ -583,6 +590,7 @@ def runmaster(nClients,args,pars,comm,rank,size):
 
                 send_dict['x_focus_position'] = zf_x
                 send_dict['y_focus_position'] = zf_y
+                send_dict['intensity'] = intensity
                 send_dict['x_phase_rms'] = x_width
                 send_dict['y_phase_rms'] = y_width
                 send_dict['x_pitch'] = x_pitch
@@ -594,7 +602,7 @@ def runmaster(nClients,args,pars,comm,rank,size):
 
                 send_dict['key_list'] = ['event_number','x_focus_position',
                         'y_focus_position','x_phase_rms','y_phase_rms', 
-                        'x_pitch', 'y_pitch']
+                        'x_pitch', 'y_pitch', 'intensity']
 
                 for key in epics_keys:
                     send_dict['key_list'].append(key)

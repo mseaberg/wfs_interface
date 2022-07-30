@@ -210,21 +210,23 @@ class App(QMainWindow, Ui_MainWindow):
         defaultDir = homeDir+'/config'
         formats = 'Config file (*.cfg)'
         # open a dialog to select a config file
-        filename = QtGui.QFileDialog.getOpenFileName(self,
+        filename, fileformat = QtGui.QFileDialog.getOpenFileName(self,
                 'Load Configuration File',defaultDir,formats)
 
         # make sure a file was chosen
         if not filename == '':
             self.config = str(filename)
 
+        print(self.config)
 
-        try:
+        #try:
             # check if the file can be loaded
             #self.pars = wfs_utils.parse_wfs_config_gui(self.config)
-            self.modify_config()
-        except:
+        #    self.modify_config()
+        #except:
             # print an error message if it can't be loaded (and don't do anything).
-            print('Failed to load config file')
+        #    print('Failed to load config file')
+        self.modify_config()
 
             
     def modify_config(self):
@@ -436,6 +438,9 @@ class App(QMainWindow, Ui_MainWindow):
             # FFT display threshold
             F0[F0>.1] = 0.1
             # update images
+
+            N = np.min([5000,np.size(self.data_dict['event_number'])])
+
             self.rawImg.setImage(np.flipud(self.data_dict['raw_image']).T,levels=levels,lut=self.lut)
             self.fftImg.setImage(np.flipud(F0).T,levels=(0,.1),lut=self.lut)
             # update plots
@@ -445,8 +450,8 @@ class App(QMainWindow, Ui_MainWindow):
             self.focus_y_smooth.setData(self.data_dict['event_number'],self.data_dict['y_smooth'])
             self.rms_x.setData(self.data_dict['event_number'],self.data_dict['x_phase_rms'])
             self.rms_x_smooth.setData(self.data_dict['event_number'],self.data_dict['xw_smooth'])
-            self.rms_y.setData(self.data_dict['event_number'],self.data_dict['y_phase_rms'])
-            self.rms_y_smooth.setData(self.data_dict['event_number'],self.data_dict['yw_smooth'])
+            self.rms_y.setData(self.data_dict['event_number'][-N:],self.data_dict['y_phase_rms'][-N:])
+            self.rms_y_smooth.setData(self.data_dict['event_number'][-N:],self.data_dict['yw_smooth'][-N:])
             self.xres_data.setData(self.data_dict['x_prime'],self.data_dict['x_residual_phase'])
             self.yres_data.setData(self.data_dict['y_prime'],self.data_dict['y_residual_phase'])
             self.messageLabel.setText('Message received')
@@ -555,6 +560,7 @@ class Config(QConfig, Ui_Config):
 
         # get only the name of the file
         name = self.filename.split('/')[-1][:-4]
+        #name = self.filename[0]
         self.lineEdit_filename.setText(name) 
         
         # set lineEdits based on what's in file
@@ -936,7 +942,7 @@ class RunWFS(QtCore.QObject):
 
         elif jobType == 'live':
             # figure out machine to run on
-            self.mon_node = 'daq-%s-mon03' % self.hutch.lower()
+            self.mon_node = 'daq-%s-mon10' % self.hutch.lower()
             print(self.mon_node)
             command_string = ('./start_live.sh %s %s %s %s %s %s'
                     % (self.mon_node, self.hutch, self.experiment, self.runnumber,

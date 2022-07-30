@@ -8,6 +8,7 @@ def get_immediate_subdirectories(a_dir,hutch):
             name[:3].lower()==hutch.lower()]
 
 def parse_wfs_config_gui(configFile):
+    print(configFile)
     config = ConfigParser.ConfigParser()
     config.read(configFile)
     pars = {}
